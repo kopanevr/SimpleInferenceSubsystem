@@ -9,7 +9,7 @@ class Model(nn.Module):
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(hidden_dim, output_dim)
 
-    def forward(self, x: torchTensor):
+    def forward(self, x: torch.Tensor):
         out = self.fc1(x)
         out = self.relu(out)
         out = self.fc2(out)
