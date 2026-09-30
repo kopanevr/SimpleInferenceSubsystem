@@ -24,7 +24,7 @@ struct TensorInfo final {
   /// @brief Указатель на размерность тензора.
   std::shared_ptr<std::vector<int64_t>> shape;
   /// @brief Имя.
-  char *name;
+  std::unique_ptr<std::string> name;
 };
 
 //// @brief
@@ -102,5 +102,9 @@ struct InferenceContext final {
   ModelPath modelPath;
   /// @brief
   ModelPath optimizedModelPath;
+
+  std::vector<char *> inputTensorNames;
+
+  std::vector<char *> inputTensorNames
 };
 } // namespace inference

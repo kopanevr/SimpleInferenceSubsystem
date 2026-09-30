@@ -253,7 +253,7 @@ std::unique_ptr<ModelInfo> Inference::getModelInfo(const InferenceContext &infer
 
   // Получение имени выхода.
   modelInfo->outputTensorInfo->name = inferenceContext.session->GetOutputNameAllocated(0, allocator).get();
-  if (!modelInfo->outputTensorInfo->name) {
+  if (!modelInfo->outputTensorInfo->name.c_str()) {
     return nullptr;
   }
 
@@ -345,11 +345,11 @@ bool Inference::inference() {
   inferenceContext_->session->Run(
     *inferenceContext_->runOptions,
     //
-    &inferenceContext_->modelInfo->inputTensorInfo->name,
+    inferenceContext_->modelInfo->inputTensorInfo->name.c_str(),
     inferenceContext_->inputTensor->value.get(),
     inferenceContext_->modelInfo->inputCount,
     //
-    &inferenceContext_->modelInfo->inputTensorInfo->name,
+    inferenceContext_->modelInfo->inputTensorInfo->name.c_str(),
     inferenceContext_->outputTensor->value.get(),
     inferenceContext_->modelInfo->outputCount
   );
