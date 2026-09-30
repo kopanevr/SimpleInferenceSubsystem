@@ -71,7 +71,10 @@ bool Inference::prepareBeforeStartInference(const uint8_t options) {
   */
 
   // Создание локального контекста вывода.
-  auto localContext = std::make_unique<InferenceContext>();
+  auto localContext = std::make_unique<InferenceContext>(new (std::nothrow) InferenceContext());
+  if (!localContext) {
+      return false;
+  }
 
   // Создание опций пулов потоков.
   inferenceContext_->threadingOptions.reset(new (std::nothrow) Ort::ThreadingOptions());
