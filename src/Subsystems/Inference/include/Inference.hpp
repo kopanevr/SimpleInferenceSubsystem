@@ -21,16 +21,6 @@
 
 //
 
-// Подсистемы.
-
-#include "EventDispatcher.hpp"
-
-//
-
-#include "FrameBuffer.hpp"
-
-//
-
 #include "onnxruntime_cxx_api.h"
 
 //
@@ -56,7 +46,10 @@ public:
 
 private:
   /// @brief Конструктор.
-  Inference(std::shared_ptr<frameCapture::FrameBuffer> frameBuffer);
+  Inference() {
+    // Инициализация.
+    init();
+  }
 
   Inference &operator=(const Inference &) = delete;
   Inference(const Inference &) = delete;
@@ -76,7 +69,7 @@ private:
   /// @brief Предварительная настройка перед запуском подсистемы.
   bool setBeforeStartUp() override;
   /// @brief Предварительная настройка перед остановкой подсистемы.
-  bool setBeforeShutDown() override {}
+  void setBeforeShutDown() override {}
 
   /// @brief Тело процесса.
   void processBody() override;
@@ -121,14 +114,8 @@ private:
   /// @brief
   std::thread inferenceThread_;
 
-  /// @brief Диспетчер событий
-  eventDispatcher::EventDispatcher *eventDispatcher_;
-
   /// @brief Контекст вывода.
   std::unique_ptr<InferenceContext> inferenceContext_;
-
-  /// @brief Буфер кадра.
-  std::shared_ptr<frameCapture::FrameBuffer> frameBuffer_;
 };
 
 /// @brief Устанавливает путь к модели.

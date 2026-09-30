@@ -62,7 +62,7 @@ public:
     }
 
     if (i < subsystemCount_) {
-      subsystems_[i].reset(new (std::nothrow) inference::Inference(frameBuffer));
+      subsystems_[i].reset(new (std::nothrow) inference::Inference());
       if (!subsystems_[i]) {
         return false;
       }
@@ -80,7 +80,7 @@ public:
   }
 
   /// @brief Настройка перед остановкой подсистемы.
-  bool setBeforeShutDown() override {
+  void setBeforeShutDown() override {
     for (const auto &item : subsystems_) {
       item->shutDown();
     }
@@ -88,13 +88,13 @@ public:
 
   /// @brief Тело основного цикла.
   void processBody() override {
-    DEBUG("Подсистема ", subsystemHandle.name, " запущена.");
+    DEBUG("Подсистема ", subsystemHandle_.name, " запущена.");
     while (true) {
       for (const auto &item : subsystems_) {
         item->process();
       }
     }
-    DEBUG("Подсистема ", subsystemHandle.name, " остановлена.");
+    DEBUG("Подсистема ", subsystemHandle_.name, " остановлена.");
   }
 
   /// @brief Возвращает количество подсистем.

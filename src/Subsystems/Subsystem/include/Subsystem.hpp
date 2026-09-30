@@ -22,13 +22,13 @@
 //
 
 /// @brief
-#define SET_SUBSYSTEM_ID(identifier) subsystemHandle.id = identifier
+#define SET_SUBSYSTEM_ID(identifier) subsystemHandle_.id = identifier
 
 /// @brief
 #define SET_SUBSYSTEM_NAME(subsystemName)                                      \
   static_assert(std::string_view(subsystemName).size() <                       \
                 std::string{}.capacity());                                     \
-  subsystemHandle.name = subsystemName
+  subsystemHandle_.name = subsystemName
 
 struct SubsystemHandle {
   /// @brief Идентификатор подсистемы.
@@ -52,32 +52,32 @@ public:
 
   /// @brief Запуск подсистемы.
   bool startUp() {
-    if (subsystemHandle.isStarted) {
+    if (subsystemHandle_.isStarted) {
       return false;
     }
     if (!setBeforeStartUp()) {
       return false;
     }
-    subsystemHandle.isStarted = true;
+    subsystemHandle_.isStarted = true;
     return true;
   }
 
   /// @brief Остановка подсистемы.
   void shutDown() {
-    if (!subsystemHandle.isStarted) {
+    if (!subsystemHandle_.isStarted) {
       return;
     }
     setBeforeShutDown();
-    subsystemHandle.isStarted = false;
+    subsystemHandle_.isStarted = false;
   }
 
   /// @brief Возвращает идентификатор подсистемы.
   [[nodiscard]] subsystemManager::SubsystemId getId() const {
-    return subsystemHandle.id;
+    return subsystemHandle_.id;
   }
 
   /// @brief Проверка запуска подсистемы.
-  [[nodiscard]] bool isRunning() const { return subsystemHandle.isStarted; }
+  [[nodiscard]] bool isRunning() const { return subsystemHandle_.isStarted; }
 
   /// @brief Основной процесс.
   /// @details Вызывается в главном потоке.
@@ -85,7 +85,7 @@ public:
 
 protected:
   /// @brief Дескриптор подсистемы.
-  SubsystemHandle subsystemHandle;
+  SubsystemHandle subsystemHandle_;
 
 protected:
   /// @brief Инициализация подсистемы.
@@ -93,7 +93,7 @@ protected:
   /// @brief
   virtual bool setBeforeStartUp() = 0;
   /// @brief
-  virtual bool setBeforeShutDown() = 0;
+  virtual void setBeforeShutDown() = 0;
   /// @brief Тело основного цикла.
   /// @details Вызывается в @ref process.
   virtual void processBody() = 0;

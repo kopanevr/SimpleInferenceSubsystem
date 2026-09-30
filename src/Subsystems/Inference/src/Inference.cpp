@@ -21,12 +21,6 @@ using namespace inference;
 
 //
 
-/// @brief Конструктор.
-Inference::Inference() {
-  // Инициализация.
-  init();
-}
-
 /// @brief Деструктор.
 Inference::~Inference() {
   if (inferenceThread_.joinable()) {
@@ -57,7 +51,7 @@ void Inference::processBody() {
 /// @brief Предварительная настройка перед запуском подсистемы.
 bool Inference::setBeforeStartUp() {
   // Подготовка перед выводом.
-  prepareBeforeStartInference();
+  return prepareBeforeStartInference();
 }
 
 namespace inference {
@@ -70,30 +64,33 @@ inline constexpr uint8_t option = 1U;
 
 /// @brief Подготовка перед запуском вывода.
 /// @param options Опции. Дополнительно смотреть @ref prepareSettings.
-void Inference::prepareBeforeStartInference(const uint8_t options) {
+bool Inference::prepareBeforeStartInference(const uint8_t options) {
   /*
   if (options & prepareSettings::option) {
   }
   */
 
   // Создание локального контекста вывода.
-  auto localContext = std::make_unique<InferenceContext>();
+  auto localContext = std::make_unique<InferenceContext>(new (std::nothrow) InferenceContext());
+  if (!localContext) {
+    return false;
+  }
 
   // Создание опций пулов потоков.
-  inferenceContext_->threadingOptions.reset(new (std::nothrow) Ort::ThreadingOptions());
-  if (!inferenceContext_->threadingOptions) {
-    return r;
+  localContext->threadingOptions.reset(new (std::nothrow) Ort::ThreadingOptions());
+  if (!localContext->threadingOptions) {
+    return false;
   }
 
   // Создание окружения.
-  inferenceContext_->env.reset(new (std::nothrow) Ort::Env(*inferenceContext_->threadingOptions, ORT_LOGGING_LEVEL_WARNING, "onnxInference"));
-  if (!inferenceContext_->env) {
+  localContext->env.reset(new (std::nothrow) Ort::Env(*localContext->threadingOptions, ORT_LOGGING_LEVEL_WARNING, "onnxInference"));
+  if (!localContext->env) {
     return false;
   }
 
   // Создание опций сессии.
-  inferenceContext_->sessionOptions.reset(new (std::nothrow) Ort::SessionOptions());
-  if (!inferenceContext_->sessionOptions) {
+  localContext->sessionOptions.reset(new (std::nothrow) Ort::SessionOptions());
+  if (!localContext->sessionOptions) {
     return false;
   }
 
@@ -136,9 +133,12 @@ void Inference::prepareBeforeStartInference(const uint8_t options) {
 
   // Создание входных и выходных тензоров.
   if (!createInputOutputTensors()) {
-    ERROR("Ошибка при создании входных и выходных тензоров.");
+    ERROR("Ошибка при создании входного и выходного тензоров.");
     inferenceContext_.reset();
+    return false;
   }
+
+  return true;
 }
 
 /// @brief Подготовка провайдера вывода.
@@ -160,42 +160,40 @@ bool Inference::createInputOutputTensors() {
 
   Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
-  // Создание входных тензоров.
-  for (size_t i = 0; i < inferenceContext_->modelInfo->inputCount; i++) {
-    Tensor tensor{};
+  const auto &inputTensor = inferenceContext_->inputTensor;
 
-    tensor.metaData.shape = inferenceContext_->modelInfo->inputTensorsInfo.at(i).shape;
+  inputTensor->metaData.shape = inferenceContext_->modelInfo->inputTensorInfo->shape;
 
-    inferenceContext_->inputTensorValues.push_back(Ort::Value::CreateTensor(
-      memoryInfo,
-      static_cast<void *>(tensor.rawData.data()),
-      tensor.rawData.size(),
-      tensor.metaData.shape->data(), // Указатель на размерность тензора.
-      tensor.metaData.shape->size(), //
-      inferenceContext_->modelInfo->inputTensorsInfo.at(i).tensorElementDataType
-      )
-    );
-
-    inferenceContext_->inputTensors.push_back(std::move(tensor));
+  // Создание входного тензора.
+  auto value = Ort::Value::CreateTensor(
+    memoryInfo,
+    static_cast<void *>(inputTensor->rawData.data()),
+    inputTensor->rawData.size(),
+    inputTensor->metaData.shape->data(), // Указатель на размерность тензора.
+    inputTensor->metaData.shape->size(), //
+    inferenceContext_->modelInfo->inputTensorInfo->tensorElementDataType
+  );
+  inferenceContext_->inputTensor->value.reset(new (std::nothrow) Ort::Value(std::move(value)));
+  if (!inferenceContext_->inputTensor->value) {
+    return false;
   }
 
-  // Создание выходных тензоров.
-  for (size_t i = 0; i < inferenceContext_->modelInfo->outputCount; i++) {
-    Tensor tensor = {};
+  const auto &outputTensor = inferenceContext_->outputTensor;
 
-    tensor.metaData.shape = inferenceContext_->modelInfo->outputTensorsInfo.at(i).shape;
+  outputTensor->metaData.shape = inferenceContext_->modelInfo->outputTensorInfo->shape;
 
-    inferenceContext_->outputTensorValues.push_back(Ort::Value::CreateTensor(
-      memoryInfo,
-      static_cast<void *>(tensor.rawData.data()),
-      tensor.rawData.size(),
-      tensor.metaData.shape->data(), // Указатель на размерность тензора.
-      tensor.metaData.shape->size(),
-      inferenceContext_->modelInfo->outputTensorsInfo.at(i).tensorElementDataType
-      )
-    );
-
-    inferenceContext_->outputTensors.push_back(std::move(tensor));
+  // Создание выходного тензора.
+  value = Ort::Value::CreateTensor(
+    memoryInfo,
+    static_cast<void *>(outputTensor->rawData.data()),
+    outputTensor->rawData.size(),
+    outputTensor->metaData.shape->data(), // Указатель на размерность тензора.
+    outputTensor->metaData.shape->size(), //
+    inferenceContext_->modelInfo->outputTensorInfo->tensorElementDataType
+  );
+  inferenceContext_->outputTensor->value.reset(new (std::nothrow) Ort::Value(std::move(value)));
+  if (!inferenceContext_->outputTensor->value) {
+    return false;
   }
 
   return true;
@@ -207,8 +205,8 @@ bool Inference::createInputOutputTensors() {
   do {                                                                         \
     LOG("Размерность: ");                                                      \
     LOG("[");                                                                  \
-    for (const auto &dim : *tensorInfo.shape) {                                \
-      dim != tensorInfo.shape->back() ? LOG(" ", dim, ",") : LOG(" ", dim);    \
+    for (const auto &dim : *tensorInfo->shape) {                               \
+      dim != tensorInfo->shape->back() ? LOG(" ", dim, ",") : LOG(" ", dim);   \
     }                                                                          \
     LOG("]");                                                                  \
   } while (false)
@@ -227,83 +225,58 @@ std::unique_ptr<ModelInfo> Inference::getModelInfo(const InferenceContext &infer
   // Аллокатор.
   Ort::AllocatorWithDefaultOptions allocator{};
 
-  // Получение количества входов.
-  modelInfo->inputCount = inferenceContext_->session->GetInputCount();
-  for (std::size_t i = 0; i < modelInfo->inputCount; i++) {
-    // Получение информации о типе входа.
-    const auto typeInfo = inferenceContext_->session->GetInputTypeInfo(i);
-    const auto tensorTypeAndShapeInfo = typeInfo.GetTensorTypeAndShapeInfo();
-
-    // Получение имени входа.
-    inferenceContext_->modelInfo->inputTensorsInfo.at(i).name = inferenceContext_->session->GetOutputNameAllocated(i, allocator).get();
-    inferenceContext_->inputTensorNames.push_back(inferenceContext.modelInfo->inputTensorsInfo.at(i).name.c_str());
-
-    TensorInfo tensorInfo{};
-
-    // Получение типа данных элементов входа.
-    tensorInfo.tensorElementDataType = tensorTypeAndShapeInfo.GetElementType();
-    // Получение размерности.
-    tensorInfo.shape = std::make_shared<std::vector<int64_t>>(tensorTypeAndShapeInfo.GetShape());
-    if (!tensorInfo.shape) {
-      return nullptr;
-    }
-
-    modelInfo->inputTensorsInfo.push_back(std::move(tensorInfo));
+  // Получение имени входа.
+  modelInfo->inputTensorInfo->name = inferenceContext.session->GetInputNameAllocated(0, allocator).get();
+  if (!modelInfo->inputTensorInfo->name) {
+    return nullptr;
   }
 
-#ifndef NDEBUG
+  // Получение информации о типе входа.
+  auto typeInfo = inferenceContext.session->GetInputTypeInfo(0);
+  auto tensorTypeAndShapeInfo = typeInfo.GetTensorTypeAndShapeInfo();
+
+  // Получение типа данных элементов входа.
+  modelInfo->inputTensorInfo->tensorElementDataType = tensorTypeAndShapeInfo.GetElementType();
+  // Получение размерности.
+  modelInfo->inputTensorInfo->shape = std::make_shared<std::vector<int64_t>>(tensorTypeAndShapeInfo.GetShape());
+  if (!modelInfo->inputTensorInfo->shape) {
+    return nullptr;
+  }
+
 #if (USER_OPTION_SHOW_MODEL_INFO == 1)
-  size_t j = 0; // Индекс тензора.
-  // Вывод информации о входах.
-  LOG("Входы: ");
-  LOG("Количество: ", modelInfo->inputCount);
-  for (const auto& tensorInfo : modelInfo->inputTensorsInfo) {
-    LOG(j++, ":");
-    LOG("Имя ", tensorInfo.name);
-    PRINT_TENSOR_SHAPE(tensorInfo); // Смотреть выше.
-    LOG("Тип элементов: ", tensorInfo.tensorElementDataType);
-  }
-#endif
+  // Вывод информации о входе.
+  LOG("Вход: ");
+  LOG("Имя: ", modelInfo->inputTensorInfo->name);
+  PRINT_TENSOR_SHAPE(modelInfo->inputTensorInfo); // Смотреть выше.
+  LOG("Тип элементов: ", modelInfo->inputTensorInfo->tensorElementDataType);
 #endif
 
-  // Получение количества выходов.
-  modelInfo->outputCount = inferenceContext_->session->GetOutputCount();
-  for (std::size_t i = 0; i < modelInfo->outputCount; i++) {
-    // Получение информации о типе выхода.
-    const auto typeInfo = inferenceContext_->session->GetOutputTypeInfo(i);
-    const auto tensorTypeAndShapeInfo = typeInfo.GetTensorTypeAndShapeInfo();
-
-    // Получение имени выхода.
-    inferenceContext_->modelInfo->outputTensorsInfo.at(i).name = inferenceContext_->session->GetOutputNameAllocated(i, allocator).get();
-    inferenceContext_->outputTensorNames.push_back(inferenceContext.modelInfo->outputTensorsInfo.at(i).name.c_str());
-
-    TensorInfo tensorInfo{};
-
-    // Получение типа данных элементов выхода.
-    tensorInfo.tensorElementDataType = tensorTypeAndShapeInfo.GetElementType();
-    // Получение размерности.
-    tensorInfo.shape = std::make_shared<std::vector<int64_t>>(tensorTypeAndShapeInfo.GetShape());
-    if (!tensorInfo.shape) {
-      return nullptr;
-    }
-
-    modelInfo->outputTensorsInfo.push_back(std::move(tensorInfo));
+  // Получение имени выхода.
+  modelInfo->outputTensorInfo->name = inferenceContext.session->GetOutputNameAllocated(0, allocator).get();
+  if (!modelInfo->outputTensorInfo->name.c_str()) {
+    return nullptr;
   }
 
-#ifndef NDEBUG
+  // Получение информации о типе выхода.
+  typeInfo = inferenceContext.session->GetOutputTypeInfo(0);
+  tensorTypeAndShapeInfo = typeInfo.GetTensorTypeAndShapeInfo();
+
+  // Получение типа данных элементов выхода.
+  modelInfo->inputTensorInfo->tensorElementDataType = tensorTypeAndShapeInfo.GetElementType();
+  // Получение размерности.
+  modelInfo->inputTensorInfo->shape = std::make_shared<std::vector<int64_t>>(tensorTypeAndShapeInfo.GetShape());
+  if (!modelInfo->inputTensorInfo->shape) {
+    return nullptr;
+  }
+
 #if (USER_OPTION_SHOW_MODEL_INFO == 1)
-  j = 0;
-  // Вывод информации о входах.
-  LOG("Выходы: ");
-  LOG("Количество: ", modelInfo->outputCount);
-  for (const auto& tensorInfo : modelInfo->outputTensorsInfo) {
-    LOG(j++, ":");
-    LOG("Имя ", tensorInfo.name);
-    PRINT_TENSOR_SHAPE(tensorInfo); // Смотреть выше.
-    LOG("Тип элементов: ", tensorInfo.tensorElementDataType);
-  }
+  // Вывод информации о входе.
+  LOG("Выход: ");
+  LOG("Имя: ", modelInfo->outputTensorInfo->name);
+  PRINT_TENSOR_SHAPE(modelInfo->outputTensorInfo); // Смотреть выше.
+  LOG("Тип элементов: ", modelInfo->outputTensorInfo->tensorElementDataType);
 #endif
-#endif
+
   return modelInfo;
 }
 
@@ -311,13 +284,13 @@ std::unique_ptr<ModelInfo> Inference::getModelInfo(const InferenceContext &infer
 
 /// @brief
 void Inference::run() {
-  DEBUG("Подсистема ", subsystemHandle.name, " запущена.");
+  DEBUG("Подсистема ", subsystemHandle_.name, " запущена.");
   while (true) {
     if (!body()) {
       break;
     }
   }
-  DEBUG("Подсистема ", subsystemHandle.name, " остановлена.");
+  DEBUG("Подсистема ", subsystemHandle_.name, " остановлена.");
 }
 
 /// @brief
@@ -364,9 +337,6 @@ void Inference::pipeline() {
 
 /// @brief Подготовка входных тензоров.
 bool Inference::prepareInputTensors() {
-  if (!inferenceContext_->inputTensors.empty()) {
-    return false;
-  }
   return true;
 }
 
@@ -375,12 +345,12 @@ bool Inference::inference() {
   inferenceContext_->session->Run(
     *inferenceContext_->runOptions,
     //
-    inferenceContext_->inputTensorNames.data(),
-    inferenceContext_->inputTensorValues.data(),
+    inferenceContext_->modelInfo->inputTensorInfo->name.c_str(),
+    inferenceContext_->inputTensor->value.get(),
     inferenceContext_->modelInfo->inputCount,
     //
-    inferenceContext_->outputTensorNames.data(),
-    inferenceContext_->outputTensorValues.data(),
+    inferenceContext_->modelInfo->inputTensorInfo->name.c_str(),
+    inferenceContext_->outputTensor->value.get(),
     inferenceContext_->modelInfo->outputCount
   );
 
@@ -389,8 +359,5 @@ bool Inference::inference() {
 
 /// @brief Подготовка выходных тензоров.
 bool Inference::prepareOutputTensors() {
-  if (!inferenceContext_->outputTensors.empty()) {
-    return false;
-  }
   return true;
 }

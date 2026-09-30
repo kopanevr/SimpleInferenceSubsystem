@@ -12,10 +12,10 @@
 
 namespace inference {
 inline const char *modelDirectoryPath = "/models/";
-inline const char *modelFileName = "yolo26n-depth.onnx";
+inline const char *modelFileName = "model.onnx";
 
 inline const char *optimizedModelDirectoryPath = "/models/";
-inline const char *optimizedModelFileName = "optimized_yolo26n-depth.onnx";
+inline const char *optimizedModelFileName = "optimized_model.onnx";
 
 /// @brief Информация о тензоре.
 struct TensorInfo final {
@@ -24,20 +24,20 @@ struct TensorInfo final {
   /// @brief Указатель на размерность тензора.
   std::shared_ptr<std::vector<int64_t>> shape;
   /// @brief Имя.
-  std::string name;
+  std::unique_ptr<std::string> name;
 };
 
 //// @brief
 struct ModelInfo {
   /// @brief Количество входов.
-  size_t inputCount;
+  [[maybe_unused]] size_t inputCount;
   /// @brief Количество выходов.
-  size_t outputCount;
+  [[maybe_unused]] size_t outputCount;
 
-  /// @brief Информация о входных тензорах.
-  std::vector<TensorInfo> inputTensorsInfo;
-  /// @brief Информация о выходных тензорах.
-  std::vector<TensorInfo> outputTensorsInfo;
+  /// @brief Информация о входном тензоре.
+  std::unique_ptr<TensorInfo> inputTensorInfo;
+  /// @brief Информация о выходном тензоре.
+  std::unique_ptr<TensorInfo> outputTensorInfo;
 };
 
 /// @brief Тензор.
@@ -46,9 +46,12 @@ struct Tensor final {
   struct MetaData final {
     /// @brief
     Ort::MemoryInfo memoryInfo{nullptr};
-    /// @brief Указатель на размерность тензора.
+    /// @brief Размерность тензора.
     std::shared_ptr<std::vector<int64_t>> shape;
   } metaData;
+
+  /// @brief
+  std::unique_ptr<Ort::Value> value;
 
   /// @brief Сырые данные тензора.
   std::vector<std::byte> rawData;
@@ -90,24 +93,18 @@ struct InferenceContext final {
   /// @brief Указатель на информацию о модели.
   std::unique_ptr<ModelInfo> modelInfo;
 
-  /// @brief Входные тензоры.
-  std::vector<Tensor> inputTensors;
-  /// @brief Выходные тензоры.
-  std::vector<Tensor> outputTensors;
-
-  /// @brief
-  std::vector<Ort::Value> inputTensorValues;
-  /// @brief
-  std::vector<Ort::Value> outputTensorValues;
-
-  /// @brief Имена входных тензоров.
-  std::vector<const char *> inputTensorNames;
-  /// @brief Имена выходных тензоров.
-  std::vector<const char *> outputTensorNames;
+  /// @brief Входной тензор.
+  std::unique_ptr<Tensor> inputTensor;
+  /// @brief Выходной тензор.
+  std::unique_ptr<Tensor> outputTensor;
 
   /// @brief
   ModelPath modelPath;
   /// @brief
   ModelPath optimizedModelPath;
+
+  std::vector<char *> inputTensorNames;
+
+  std::vector<char *> inputTensorNames
 };
 } // namespace inference
