@@ -21,12 +21,6 @@ using namespace inference;
 
 //
 
-/// @brief Конструктор.
-Inference::Inference() {
-  // Инициализация.
-  init();
-}
-
 /// @brief Деструктор.
 Inference::~Inference() {
   if (inferenceThread_.joinable()) {
@@ -57,7 +51,7 @@ void Inference::processBody() {
 /// @brief Предварительная настройка перед запуском подсистемы.
 bool Inference::setBeforeStartUp() {
   // Подготовка перед выводом.
-  prepareBeforeStartInference();
+  return prepareBeforeStartInference();
 }
 
 namespace inference {
@@ -70,7 +64,7 @@ inline constexpr uint8_t option = 1U;
 
 /// @brief Подготовка перед запуском вывода.
 /// @param options Опции. Дополнительно смотреть @ref prepareSettings.
-void Inference::prepareBeforeStartInference(const uint8_t options) {
+bool Inference::prepareBeforeStartInference(const uint8_t options) {
   /*
   if (options & prepareSettings::option) {
   }
@@ -82,7 +76,7 @@ void Inference::prepareBeforeStartInference(const uint8_t options) {
   // Создание опций пулов потоков.
   inferenceContext_->threadingOptions.reset(new (std::nothrow) Ort::ThreadingOptions());
   if (!inferenceContext_->threadingOptions) {
-    return r;
+    return false;
   }
 
   // Создание окружения.
@@ -138,7 +132,10 @@ void Inference::prepareBeforeStartInference(const uint8_t options) {
   if (!createInputOutputTensors()) {
     ERROR("Ошибка при создании входных и выходных тензоров.");
     inferenceContext_.reset();
+    return false;
   }
+
+  return true;
 }
 
 /// @brief Подготовка провайдера вывода.
@@ -311,13 +308,13 @@ std::unique_ptr<ModelInfo> Inference::getModelInfo(const InferenceContext &infer
 
 /// @brief
 void Inference::run() {
-  DEBUG("Подсистема ", subsystemHandle.name, " запущена.");
+  DEBUG("Подсистема ", subsystemHandle_.name, " запущена.");
   while (true) {
     if (!body()) {
       break;
     }
   }
-  DEBUG("Подсистема ", subsystemHandle.name, " остановлена.");
+  DEBUG("Подсистема ", subsystemHandle_.name, " остановлена.");
 }
 
 /// @brief

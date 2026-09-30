@@ -72,7 +72,7 @@ private:
   /// @brief Предварительная настройка перед запуском подсистемы.
   bool setBeforeStartUp() override { return true; }
   /// @brief Предварительная настройка перед остановкой подсистемы.
-  bool setBeforeShutDown() override { return false; }
+  void setBeforeShutDown() override { }
 
   /// @brief Тело процесса.
   void processBody() override {}
